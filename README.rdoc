@@ -37,3 +37,74 @@ is not ActiveSupport friendly, so I've made a note in ruote-kit to handle this.
 
 No, you've been warned. Get into #ruote or on the openwferu-users mail list. If convinced,
 I'll accept Heineken as payment.
+
+== Example usage
+
+The whole library launches process by means of ActiveRecord callbacks, here is an example
+
+  class Service < ActiveRecord::Base
+    belongs_to :broker
+    belongs_to :client
+
+    launch_processes
+
+    after_create :service_created!
+
+    private
+
+    def service_created!
+      payload = {
+        :type => 'Insurance',
+        :number => 'I0001'
+      }
+
+      ruote_launch_process 'service_created', payload, self.participants
+    end
+
+    def self.participants
+      { :broker => self.broker, :client => self.client }
+    end
+  end
+
+Then the process definition might look like this:
+
+  class ServiceProcess0 < OpenWFE::ProcessDefinition
+    sequence do
+      <%= get_participant(:broker) %> :activity => 'Credit vet'
+      <%= get_participant(:client) %> :activity => 'Sign debit order'
+      clerk :activity => 'File application'
+    end
+  end
+
+The 'get_participant()' helper will make a participant name that looks like this:
+
+  Model-ID -> broker-2 or client-30
+
+It pulls the information out the final hash parameter to ruote_launch_process (for
+the participant maps).
+
+=== Spec'ing launches
+
+Use mocha to test the launches:
+
+  describe Service, "process launches" do
+
+    describe "when service is created" do
+      client = Factory(:client)
+      broker = Factory(:broker)
+
+      service = Service.new(:type => 'Insurance', :client => client, :broker => broker)
+
+      expects_process('service_created', { :type => 'Insurance', :number => 'I0001' }, { :client => client, :broker => broker }
+
+      service.save
+    end
+  end
+
+Using mocha expectations you can set extremely fine controls to test the presence or absence of payload and participant
+parameters. The spec_helper.rb file in lib/ruote has plenty more to choose from :)
+
+== In close
+
+I've had to strip a lot of good stuff from the spec's so they don't expose our business
+model, but I'm sure you can figure out what else is possible...
